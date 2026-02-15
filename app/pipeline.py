@@ -1,7 +1,7 @@
 """Input preprocessing pipeline for article generation.
 
-This module normalizes raw user parameters, cleans SEO keywords, and optionally
-extracts contextual text from a source URL.
+This module prepares API inputs into a deterministic structure aligned with the
+training/inference template used in the notebooks.
 """
 
 import re
@@ -31,11 +31,12 @@ STOPWORDS = {
 class PreparedInput:
     """Normalized payload consumed by prompt building and generation."""
 
+    title: str
     topic_category: str
     industry: str
-    target_audience: str
     seo_keywords: List[str]
     source_context: str
+    target_length_label: str
     article_length: str
     tone: str
 
@@ -60,6 +61,15 @@ def _clean_keywords(keywords: List[str]) -> List[str]:
     return cleaned[:12]
 
 
+def _length_label(article_length: str) -> str:
+    """Map logical length choices to label used in prompts/training."""
+    if article_length == "short":
+        return "500-700 words"
+    if article_length == "long":
+        return "1400-1800 words"
+    return "900-1200 words"
+
+
 def _extract_web_text(url: str, timeout: int = 10) -> str:
     """Fetch and sanitize visible webpage text for optional context enrichment."""
     try:
@@ -79,7 +89,6 @@ def _extract_web_text(url: str, timeout: int = 10) -> str:
 def prepare_input(
     topic_category: str,
     industry: str,
-    target_audience: str,
     seo_keywords: Optional[List[str]] = None,
     source_url: Optional[str] = None,
     source_text: Optional[str] = None,
@@ -94,6 +103,10 @@ def prepare_input(
 
     cleaned_keywords = _clean_keywords(seo_keywords or [])
 
+    normalized_topic = _normalize_text(topic_category)
+    normalized_industry = _normalize_text(industry)
+    derived_title = f"{normalized_topic} in {normalized_industry}"
+
     context_parts = []
     if source_text:
         context_parts.append(_normalize_text(source_text)[:3000])
@@ -106,11 +119,12 @@ def prepare_input(
     source_context = "\n".join([part for part in context_parts if part]).strip()
 
     return PreparedInput(
-        topic_category=_normalize_text(topic_category),
-        industry=_normalize_text(industry),
-        target_audience=_normalize_text(target_audience),
+        title=derived_title,
+        topic_category=normalized_topic,
+        industry=normalized_industry,
         seo_keywords=cleaned_keywords,
         source_context=source_context,
+        target_length_label=_length_label(normalized_length),
         article_length=normalized_length,
         tone=_normalize_text(tone),
     )

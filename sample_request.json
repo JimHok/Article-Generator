@@ -1,14 +1,72 @@
-{
-  "topic_category": "Understand People and Consumer",
-  "industry": "FMCG",
-  "target_audience": "CMO and Growth Team",
-  "seo_keywords": [
-    "customer journey",
-    "consumer behavior",
-    "marketing strategy",
-    "future trends"
-  ],
-  "source_url": "https://example.com/insights/customer-journey-misconceptions",
-  "article_length": "medium",
-  "tone": "insightful, strategic, clear"
-}
+[
+  {
+    "topic_category": "Artificial Intelligence",
+    "industry": "AI",
+    "seo_keywords": ["machine learning"],
+    "article_length": "medium",
+    "tone": "insightful, strategic, clear"
+  },
+  {
+    "topic_category": "Financial Innovation",
+    "industry": "FinTech",
+    "seo_keywords": ["predictive analytics", "risk scoring"],
+    "article_length": "medium",
+    "tone": "insightful, data-driven, practical"
+  },
+  {
+    "topic_category": "Healthcare Transformation",
+    "industry": "Healthcare",
+    "seo_keywords": ["clinical AI", "decision support"],
+    "article_length": "long",
+    "tone": "professional, strategic, clear"
+  },
+  {
+    "topic_category": "Retail Intelligence",
+    "industry": "Retail",
+    "seo_keywords": ["recommendation systems", "customer personalization"],
+    "article_length": "medium",
+    "tone": "insightful, practical, concise"
+  },
+  {
+    "topic_category": "Smart Manufacturing",
+    "industry": "Manufacturing",
+    "seo_keywords": ["predictive maintenance", "industrial IoT"],
+    "article_length": "medium",
+    "tone": "strategic, technical, clear"
+  },
+  {
+    "topic_category": "Supply Chain Optimization",
+    "industry": "Logistics",
+    "seo_keywords": ["route optimization", "supply chain visibility"],
+    "article_length": "short",
+    "tone": "direct, practical, insightful"
+  },
+  {
+    "topic_category": "EdTech Innovation",
+    "industry": "Education",
+    "seo_keywords": ["adaptive learning", "learning analytics"],
+    "article_length": "medium",
+    "tone": "clear, informative, strategic"
+  },
+  {
+    "topic_category": "Energy Modernization",
+    "industry": "Energy",
+    "seo_keywords": ["smart grid", "demand forecasting"],
+    "article_length": "long",
+    "tone": "analytical, strategic, clear"
+  },
+  {
+    "topic_category": "Telecom Automation",
+    "industry": "Telecommunications",
+    "seo_keywords": ["network optimization", "AI operations"],
+    "article_length": "medium",
+    "tone": "insightful, technical, concise"
+  },
+  {
+    "topic_category": "Cybersecurity Strategy",
+    "industry": "Cybersecurity",
+    "seo_keywords": ["threat detection", "anomaly detection"],
+    "article_length": "medium",
+    "tone": "strategic, authoritative, clear"
+  }
+]

@@ -1,7 +1,36 @@
 [project]
-name = "article-generator"
+name = "jenosize"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "accelerate==1.10.0",
+    "beautifulsoup4==4.13.4",
+    "datasets==4.0.0",
+    "evaluate>=0.4.6",
+    "fastapi==0.116.1",
+    "ipykernel>=7.2.0",
+    "ipywidgets>=8.1.8",
+    "matplotlib>=3.10.8",
+    "peft==0.17.0",
+    "pydantic==2.11.7",
+    "python-dotenv==1.1.1",
+    "requests==2.32.5",
+    "scikit-learn>=1.8.0",
+    "sentencepiece==0.2.1",
+    "torch>=2.6.0",
+    "tqdm>=4.67.3",
+    "transformers==4.55.2",
+    "uvicorn[standard]==0.35.0",
+]
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"

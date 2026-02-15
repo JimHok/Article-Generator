@@ -1,19 +1,16 @@
-"""
-Fine-tuning script for article generation prototype.
-
-Default model: google/flan-t5-base
-Method: PEFT LoRA for efficient adaptation
-
-Default dataset: ag_news (Hugging Face, publicly available)
-"""
+"""Notebook-aligned trainer script for article generation with FLAN-T5 + LoRA."""
 
 import argparse
+import json
 import re
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Iterable, cast
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
 from peft import LoraConfig, TaskType, get_peft_model
+import torch
 from transformers import (
     AutoModelForSeq2SeqLM,
     AutoTokenizer,
@@ -23,27 +20,125 @@ from transformers import (
 )
 
 
-def parse_args():
-    """Parse CLI arguments for fine-tuning configuration."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=str, default="google/flan-t5-base")
-    parser.add_argument("--dataset_name", type=str, default="ag_news")
-    parser.add_argument("--dataset_split", type=str, default="train")
-    parser.add_argument("--max_records", type=int, default=5000)
-    parser.add_argument("--output_dir", type=str, default="artifacts/article-generator-flan-t5-lora")
-    parser.add_argument("--epochs", type=float, default=3)
-    parser.add_argument("--batch_size", type=int, default=2)
-    parser.add_argument("--lr", type=float, default=2e-4)
-    return parser.parse_args()
+@dataclass
+class TrainConfig:
+    model_name: str
+    output_dir: str
+    dataset_name: str
+    dataset_split: str
+    max_records: int
+    epochs: float
+    batch_size: int
+    lr: float
+    save_strategy: str
+    logging_steps: int
+    allow_cpu: bool
+    gen_do_sample: bool
+    gen_temperature: float
+    gen_top_p: float
+    gen_top_k: int
+    gen_no_repeat_ngram_size: int
+    gen_repetition_penalty: float
+    gen_length_penalty: float
+    gen_min_new_tokens: int
+    gen_max_new_tokens: int
+
+
+def parse_args() -> TrainConfig:
+    """Parse and validate CLI arguments for notebook-aligned training."""
+    parser = argparse.ArgumentParser(
+        description="Fine-tune FLAN-T5 with LoRA for article generation."
+    )
+
+    model_group = parser.add_argument_group("Model")
+    model_group.add_argument("--model_name", type=str, default="google/flan-t5-base")
+    model_group.add_argument(
+        "--output_dir", type=str, default="artifacts/article-generator-flan-t5-lora"
+    )
+
+    data_group = parser.add_argument_group("Dataset")
+    data_group.add_argument(
+        "--dataset_name", type=str, default="fabiochiu/medium-articles"
+    )
+    data_group.add_argument("--dataset_split", type=str, default="train")
+    data_group.add_argument("--max_records", type=int, default=1000)
+
+    train_group = parser.add_argument_group("Training")
+    train_group.add_argument("--epochs", type=float, default=10)
+    train_group.add_argument("--batch_size", type=int, default=2)
+    train_group.add_argument("--lr", type=float, default=2e-4)
+    train_group.add_argument("--save_strategy", type=str, default="no")
+    train_group.add_argument("--logging_steps", type=int, default=5)
+    train_group.add_argument(
+        "--allow_cpu",
+        action="store_true",
+        help="Allow CPU fallback if CUDA is unavailable.",
+    )
+
+    generation_group = parser.add_argument_group("Generation Defaults")
+    generation_group.add_argument(
+        "--gen_do_sample",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable sampling at generation time (use --no-gen_do_sample to disable).",
+    )
+    generation_group.add_argument("--gen_temperature", type=float, default=0.8)
+    generation_group.add_argument("--gen_top_p", type=float, default=0.9)
+    generation_group.add_argument("--gen_top_k", type=int, default=50)
+    generation_group.add_argument("--gen_no_repeat_ngram_size", type=int, default=4)
+    generation_group.add_argument("--gen_repetition_penalty", type=float, default=1.2)
+    generation_group.add_argument("--gen_length_penalty", type=float, default=1.0)
+    generation_group.add_argument("--gen_min_new_tokens", type=int, default=80)
+    generation_group.add_argument("--gen_max_new_tokens", type=int, default=220)
+
+    args = parser.parse_args()
+
+    if args.max_records < 1:
+        parser.error("--max_records must be >= 1")
+    if args.batch_size < 1:
+        parser.error("--batch_size must be >= 1")
+    if args.epochs <= 0:
+        parser.error("--epochs must be > 0")
+    if args.lr <= 0:
+        parser.error("--lr must be > 0")
+    if args.gen_min_new_tokens < 1:
+        parser.error("--gen_min_new_tokens must be >= 1")
+    if args.gen_max_new_tokens < args.gen_min_new_tokens:
+        parser.error("--gen_max_new_tokens must be >= --gen_min_new_tokens")
+    if not 0 <= args.gen_top_p <= 1:
+        parser.error("--gen_top_p must be in [0, 1]")
+
+    return TrainConfig(**vars(args))
 
 
 def _normalize_text(text: str) -> str:
-    """Normalize whitespace for cleaner prompts and labels."""
     return re.sub(r"\s+", " ", (text or "")).strip()
 
 
-def _extract_keywords(text: str, top_k: int = 5):
-    """Extract simple frequency-based keywords from source text."""
+def _normalize_tags(raw_tags: Any) -> list[str]:
+    if raw_tags is None:
+        return []
+    if isinstance(raw_tags, list):
+        tags = [_normalize_text(str(tag)) for tag in raw_tags]
+    else:
+        text_tags = _normalize_text(str(raw_tags))
+        tags = [
+            _normalize_text(part)
+            for part in re.split(r"[,|/#]+", text_tags)
+            if _normalize_text(part)
+        ]
+
+    unique_tags = []
+    seen = set()
+    for tag in tags:
+        lowered = tag.lower()
+        if tag and lowered not in seen:
+            unique_tags.append(tag)
+            seen.add(lowered)
+    return unique_tags
+
+
+def _extract_keywords(text: str, top_k: int = 5) -> list[str]:
     stopwords = {
         "the",
         "and",
@@ -71,89 +166,103 @@ def _extract_keywords(text: str, top_k: int = 5):
     return [word for word, _ in freq.most_common(top_k)]
 
 
-def format_ag_news_record(example):
-    """Transform AG News row into instruction-tuning source/target fields.
+def _length_from_text(text: str) -> str:
+    word_count = len(text.split())
+    if word_count < 800:
+        return "500-700 words"
+    if word_count < 1300:
+        return "900-1200 words"
+    return "1400-1800 words"
 
-    AG News labels:
-    - 0: World
-    - 1: Sports
-    - 2: Business
-    - 3: Sci/Tech
-    """
-    label = int(example["label"])
-    text = _normalize_text(example["text"])
-    title = _normalize_text(text.split(" - ")[0]) if " - " in text else _normalize_text(text[:120])
+
+def _get_column_names(dataset: Any) -> list[str]:
+    column_names = getattr(dataset, "column_names", [])
+    if isinstance(column_names, dict):
+        return list(next(iter(column_names.values()), []))
+    if isinstance(column_names, (list, tuple)):
+        return list(column_names)
+    return []
+
+
+def format_medium_record(example: dict[str, Any]) -> dict[str, str]:
+    title = _normalize_text(example.get("title", "")) or "Untitled Article"
+    text = _normalize_text(example.get("text", ""))
+    tags = _normalize_tags(example.get("tags"))
     keywords = _extract_keywords(text)
+    target_length = _length_from_text(text)
 
-    if label == 2:
-        topic_category = "Business Trends"
-        industry = "Cross-Industry"
-        audience = "CMO, Strategy Lead, Growth Team"
-    else:
-        topic_category = "Technology Trends"
-        industry = "Technology"
-        audience = "Product, Innovation, and Marketing Leaders"
+    topic_category = tags[0] if len(tags) > 0 else "General"
+    industry = tags[1] if len(tags) > 1 else topic_category
+    tags_line = ", ".join(tags[:8]) if tags else "General"
+    keywords_text = ", ".join(keywords) if keywords else "business strategy"
 
     input_text = (
         f"Topic: {title}; "
         f"Topic Category: {topic_category}; "
         f"Industry: {industry}; "
-        f"Audience: {audience}; "
-        f"Keywords: {', '.join(keywords) if keywords else 'business strategy'}"
+        f"Target length: {target_length}; "
+        f"Tags: {tags_line}; "
+        f"Keywords: {keywords_text}"
     )
-    output_text = (
-        f"Title: {title}\n"
-        "Article:\n"
-        "## Why this trend matters now\n"
-        f"{text}\n\n"
-        "## Strategic implications\n"
-        "- Reassess changing customer and market signals.\n"
-        "- Align teams around clear business outcomes and KPIs.\n"
-        "- Run fast experiments and scale validated ideas.\n\n"
-        "## Action framework\n"
-        "1. Diagnose the shift and define target audience impact.\n"
-        "2. Prioritize initiatives by value, effort, and urgency.\n"
-        "3. Execute, measure, and iterate in short cycles.\n"
-    )
+
     return {
         "source": (
-            "Instruction: Write an insight-driven business article with this style: start with a bold misconception or tension, define the concept briefly, present numbered misconceptions or insights with short practical examples, include a simple decision matrix/framework, keep the tone analytical but easy to read, and close with actionable recommendations plus a concise call to action.\n"
+            "Instruction: Write an insight-driven business article body based on the given title, category, industry, and tags.\n"
+            f"Title: {title}\n"
             f"Input: {input_text}\n"
-            "Output:"
+            "Output (JSON):"
         ),
-        "target": output_text,
+        "target": json.dumps(
+            {"Title": title, "Article": text},
+            ensure_ascii=False,
+        ),
     }
 
 
-def main():
-    """Run LoRA fine-tuning and persist adapter/tokenizer artifacts."""
-    args = parse_args()
-    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Use only public Hugging Face dataset and transform rows.
-    dataset = load_dataset(args.dataset_name, split=args.dataset_split)
-    # Keep rows most relevant to this use case (Business and Sci/Tech).
-    dataset = dataset.filter(lambda row: int(row["label"]) in {2, 3})
-    if args.max_records > 0:
-        dataset = dataset.select(range(min(args.max_records, len(dataset))))
-    dataset = dataset.map(format_ag_news_record, remove_columns=dataset.column_names)
-
-    # Initialize base model components from Hugging Face.
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
-
-    # Apply PEFT LoRA for parameter-efficient adaptation.
-    lora_config = LoraConfig(
-        task_type=TaskType.SEQ_2_SEQ_LM,
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.1,
-        target_modules=["q", "v"],
+def _load_training_rows(config: TrainConfig) -> list[dict[str, Any]]:
+    dataset_name = config.dataset_name.lstrip("/")
+    dataset_stream = load_dataset(
+        dataset_name,
+        split=config.dataset_split,
+        streaming=True,
     )
-    model = get_peft_model(model, lora_config)
 
-    def preprocess(batch):
-        """Tokenize source/target text into model input tensors."""
+    iterable_dataset: Iterable[dict[str, Any]]
+    if hasattr(dataset_stream, "take"):
+        iterable_dataset = cast(Iterable[dict[str, Any]], dataset_stream)
+    elif isinstance(dataset_stream, dict) and config.dataset_split in dataset_stream:
+        iterable_dataset = cast(
+            Iterable[dict[str, Any]], dataset_stream[config.dataset_split]
+        )
+    else:
+        raise ValueError(
+            f"Unable to access split '{config.dataset_split}' from dataset '{dataset_name}'."
+        )
+
+    effective_records = min(config.max_records, 2000)
+    return list(cast(Any, iterable_dataset).take(effective_records))
+
+
+def _prepare_dataset(rows: list[dict[str, Any]]) -> Dataset:
+    train_data = Dataset.from_list(rows)
+    required_columns = {"title", "text", "tags"}
+    available_columns = set(_get_column_names(train_data))
+
+    if not required_columns.issubset(available_columns):
+        raise ValueError(
+            "Dataset schema mismatch. Expected columns: ['title', 'text', 'tags']. "
+            f"Got: {sorted(available_columns)}"
+        )
+
+    raw_column_names = _get_column_names(train_data)
+    return cast(
+        Dataset,
+        train_data.map(format_medium_record, remove_columns=raw_column_names),
+    )
+
+
+def _build_tokenized_dataset(train_data: Dataset, tokenizer: Any) -> Dataset:
+    def preprocess(batch: dict[str, list[str]]) -> dict[str, Any]:
         model_inputs = tokenizer(
             batch["source"],
             max_length=768,
@@ -167,18 +276,72 @@ def main():
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs
 
-    # Remove raw text columns after tokenization to reduce memory usage.
-    tokenized = dataset.map(preprocess, batched=True, remove_columns=dataset.column_names)
+    formatted_column_names = _get_column_names(train_data)
+    return cast(
+        Dataset,
+        train_data.map(preprocess, batched=True, remove_columns=formatted_column_names),
+    )
+
+
+def _configure_model_and_tokenizer(config: TrainConfig) -> tuple[Any, Any]:
+    tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(config.model_name)
+
+    lora_config = LoraConfig(
+        task_type=TaskType.SEQ_2_SEQ_LM,
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.1,
+        target_modules=["q", "v"],
+    )
+    model = get_peft_model(model, lora_config)
+
+    generation_config = cast(Any, model).generation_config
+    generation_config.do_sample = config.gen_do_sample
+    generation_config.temperature = config.gen_temperature
+    generation_config.top_p = config.gen_top_p
+    generation_config.top_k = config.gen_top_k
+    generation_config.no_repeat_ngram_size = config.gen_no_repeat_ngram_size
+    generation_config.repetition_penalty = config.gen_repetition_penalty
+    generation_config.length_penalty = config.gen_length_penalty
+    generation_config.min_new_tokens = config.gen_min_new_tokens
+    generation_config.max_new_tokens = config.gen_max_new_tokens
+
+    return model, tokenizer
+
+
+def main() -> None:
+    """Run LoRA fine-tuning and persist adapter/tokenizer artifacts."""
+    config = parse_args()
+    Path(config.output_dir).mkdir(parents=True, exist_ok=True)
+
+    if not torch.cuda.is_available() and not config.allow_cpu:
+        raise RuntimeError(
+            "CUDA GPU not available. Use --allow_cpu if you want CPU fallback."
+        )
+
+    rows = _load_training_rows(config)
+    train_data = _prepare_dataset(rows)
+
+    model, tokenizer = _configure_model_and_tokenizer(config)
+    tokenized = _build_tokenized_dataset(train_data, tokenizer)
     collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
 
+    use_cuda = torch.cuda.is_available()
+    use_bf16 = use_cuda and torch.cuda.is_bf16_supported()
+    use_fp16 = use_cuda and not use_bf16
+
     train_args = Seq2SeqTrainingArguments(
-        output_dir=args.output_dir,
-        learning_rate=args.lr,
-        per_device_train_batch_size=args.batch_size,
-        num_train_epochs=args.epochs,
-        logging_steps=5,
-        save_strategy="epoch",
-        fp16=False,
+        output_dir=config.output_dir,
+        learning_rate=config.lr,
+        per_device_train_batch_size=config.batch_size,
+        num_train_epochs=config.epochs,
+        logging_steps=config.logging_steps,
+        save_strategy=config.save_strategy,
+        no_cuda=not use_cuda,
+        fp16=use_fp16,
+        bf16=use_bf16,
+        dataloader_pin_memory=use_cuda,
         report_to="none",
     )
 
@@ -187,15 +350,15 @@ def main():
         args=train_args,
         train_dataset=tokenized,
         data_collator=collator,
-        tokenizer=tokenizer,
     )
 
-    # Persist adapter + tokenizer so API can load fine-tuned artifacts.
     trainer.train()
-    trainer.model.save_pretrained(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
+    trainer.save_model(config.output_dir)
+    model.save_pretrained(config.output_dir)
+    cast(Any, model).generation_config.save_pretrained(config.output_dir)
+    tokenizer.save_pretrained(config.output_dir)
 
-    print(f"Training complete. Model saved to {args.output_dir}")
+    print(f"Training complete. Model saved to {config.output_dir}")
 
 
 if __name__ == "__main__":
