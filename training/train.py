@@ -1,5 +1,5 @@
 """
-Fine-tuning script for Jenosize article generation prototype.
+Fine-tuning script for article generation prototype.
 
 Default model: google/flan-t5-base
 Method: PEFT LoRA for efficient adaptation
@@ -30,7 +30,7 @@ def parse_args():
     parser.add_argument("--dataset_name", type=str, default="ag_news")
     parser.add_argument("--dataset_split", type=str, default="train")
     parser.add_argument("--max_records", type=int, default=5000)
-    parser.add_argument("--output_dir", type=str, default="artifacts/jenosize-flan-t5-lora")
+    parser.add_argument("--output_dir", type=str, default="artifacts/article-generator-flan-t5-lora")
     parser.add_argument("--epochs", type=float, default=3)
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--lr", type=float, default=2e-4)
@@ -117,7 +117,7 @@ def format_ag_news_record(example):
     )
     return {
         "source": (
-            "Instruction: Write an insight-driven business article with this style: start with a bold misconception or tension, define the concept briefly, present numbered misconceptions or insights with short practical examples, include a simple decision matrix/framework, keep the tone analytical but easy to read, and close with actionable recommendations plus a concise partnership-oriented call to action.\n"
+            "Instruction: Write an insight-driven business article with this style: start with a bold misconception or tension, define the concept briefly, present numbered misconceptions or insights with short practical examples, include a simple decision matrix/framework, keep the tone analytical but easy to read, and close with actionable recommendations plus a concise call to action.\n"
             f"Input: {input_text}\n"
             "Output:"
         ),

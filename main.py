@@ -1,5 +1,5 @@
 def main():
-    print("Hello from jenosize!")
+    print("Hello from article-generator!")
 
 
 if __name__ == "__main__":

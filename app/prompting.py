@@ -40,7 +40,7 @@ Style requirements:
 5) End with strategic recommendations and a concise call-to-action.
 6) Keep language clear, analytical, and business-friendly.
 7) Integrate SEO keywords naturally (no keyword stuffing).
-8) Do not mention the word "Jenosize" anywhere in the output.
+8) Do not mention any specific company brand name in the output.
 
 Optional source context (use only as supporting context, never copy):
 {item.source_context if item.source_context else "No external source text provided."}

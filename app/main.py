@@ -8,7 +8,7 @@ from app.generator import get_generator
 from app.pipeline import prepare_input
 from app.schemas import GenerateRequest, GenerateResponse
 
-app = FastAPI(title="Jenosize Content Generation Prototype", version="1.0.0")
+app = FastAPI(title="Article Generator Prototype", version="1.0.0")
 
 # Model path can point to a Hugging Face hub ID or local fine-tuned artifacts.
 MODEL_PATH = os.getenv("MODEL_PATH", "google/flan-t5-base")

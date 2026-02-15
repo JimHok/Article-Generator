@@ -75,9 +75,9 @@ class ArticleGenerator:
                     break
             article = decoded.split("Article:", 1)[-1].strip()
 
-        # Safety rule: suppress brand-name mention in generated output.
-        title = re.sub(r"(?i)jenosize", "", title).strip()
-        article = re.sub(r"(?i)jenosize", "", article).strip()
+        # Normalize extra whitespace from model generations.
+        title = title.strip()
+        article = article.strip()
         title = re.sub(r"\s{2,}", " ", title)
         article = re.sub(r"\s{2,}", " ", article)
         if not title:

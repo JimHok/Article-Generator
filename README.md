@@ -1,4 +1,4 @@
-# Jenosize Content Generation Prototype
+# Article Generator Prototype
 
 A simple end-to-end prototype for generating insight articles about business trends and future ideas.
 
@@ -40,7 +40,7 @@ For better quality, expand the dataset with:
 
 - Business trend articles
 - Marketing strategy and campaign concept examples
-- Industry-specific writing samples aligned with Jenosize tone
+- Industry-specific writing samples aligned with the target editorial tone
 
 Keep all data compliant with licensing and internal usage permissions.
 
@@ -101,7 +101,7 @@ python training/train.py \
   --dataset_name ag_news \
   --dataset_split train \
   --max_records 5000 \
-  --output_dir artifacts/jenosize-flan-t5-lora \
+  --output_dir artifacts/article-generator-flan-t5-lora \
   --epochs 3 \
   --batch_size 2 \
   --lr 2e-4
@@ -110,7 +110,7 @@ python training/train.py \
 ### C. Run API
 
 ```bash
-set MODEL_PATH=artifacts/jenosize-flan-t5-lora
+set MODEL_PATH=artifacts/article-generator-flan-t5-lora
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -132,7 +132,7 @@ See [sample_request.json](sample_request.json).
 
 ## Notes on Style Alignment
 
-The prompt template is tuned to reflect a Jenosize-like style:
+The prompt template is tuned to reflect the reference editorial style:
 
 - Insight-first narrative
 - Structured sections (problem, misconceptions/insights, framework, actions)
@@ -141,7 +141,7 @@ The prompt template is tuned to reflect a Jenosize-like style:
 
 Reference article used for style calibration:
 
-- https://www.jenosize.com/en/ideas/understand-people-and-consumer/customer-journey-misconceptions
+- https://example.com/insights/customer-journey-misconceptions
 
 ---
 
