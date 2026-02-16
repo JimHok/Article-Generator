@@ -98,17 +98,52 @@ print(tokenizer.decode(out[0], skip_special_tokens=True))
 
 #### Training Hyperparameters
 
-- **Base model:** `google/flan-t5-base`
-- **Adapter type:** LoRA
-- **Task type:** `SEQ_2_SEQ_LM`
-- **LoRA rank (`r`):** 16
-- **LoRA alpha:** 32
-- **LoRA dropout:** 0.1
-- **Target modules:** `q`, `v`
-- **Batch size:** 2
-- **Learning rate:** 2e-4
-- **Epochs:** user-configurable, capped at 1000
-- **Precision:** bf16 if supported, else fp16 on CUDA
+Below are the tuning parameters used in `training/train.py` and why they were selected.
+
+**Core fine-tuning settings**
+
+- **Base model:** `google/flan-t5-base`Reason: strong instruction-following quality with manageable resource usage.
+- **Adapter type:** LoRA (`peft`)Reason: parameter-efficient fine-tuning to reduce VRAM and training time while preserving base model knowledge.
+- **Task type:** `SEQ_2_SEQ_LM`Reason: FLAN-T5 is an encoder-decoder architecture and needs seq2seq adaptation.
+- **LoRA rank (`r`) = 16**Reason: balanced adapter capacity; larger values increase capacity but cost more memory/compute.
+- **LoRA alpha = 32**Reason: provides moderate adapter scaling (`alpha/r = 2`) to improve learning signal without aggressive updates.
+- **LoRA dropout = 0.1**Reason: regularization to reduce overfitting on a relatively small capped dataset.
+- **Target modules = [`q`, `v`]**
+  Reason: adapting attention query/value projections is a common efficient strategy with good quality-cost tradeoff.
+
+**Training loop settings**
+
+- **Dataset name:** `fabiochiu/medium-articles`Reason: article-style domain data aligned with long-form generation goals.
+- **Dataset split:** `train`Reason: prototype setup uses the main train split for adaptation.
+- **Max records (default):** `10000` with streaming and `take(10000)`Reason: controls data volume and runtime while avoiding full dataset download.
+- **Epochs (default):** `100`Reason: allows deeper adaptation; should be tuned down/up based on validation quality and overfitting signs.
+- **Batch size:** `2`Reason: fits common single-GPU memory limits for FLAN-T5 + LoRA.
+- **Learning rate:** `2e-4`Reason: common LoRA starting point; fast enough for adapter learning without severe instability.
+- **Save strategy:** `no` (default)Reason: faster prototype runs and lower disk use; can switch to `epoch` for checkpointing.
+- **Logging steps:** `5`Reason: frequent progress visibility during short/medium runs.
+- **Precision:** auto-selected (`bf16` if supported, else `fp16` on CUDA)Reason: speed and memory efficiency on GPU while maintaining numeric stability.
+- **CPU fallback:** disabled by default (`--allow_cpu` to enable)
+  Reason: this training flow is intended for GPU-first execution.
+
+**Tokenization settings**
+
+- **Source max length:** `768`
+- **Target max length:** `768`
+  Reason: keeps memory bounded while preserving enough context for article-like samples.
+
+**Generation defaults saved into adapter config**
+
+- **do_sample:** `True`
+- **temperature:** `0.8`
+- **top_p:** `0.9`
+- **top_k:** `50`
+- **no_repeat_ngram_size:** `4`
+- **repetition_penalty:** `1.2`
+- **length_penalty:** `1.0`
+- **min_new_tokens:** `80`
+- **max_new_tokens:** `220`
+
+Reason: these defaults favor coherent but non-repetitive long-form output, with moderate creativity and bounded response length.
 
 ## Evaluation
 
@@ -125,16 +160,6 @@ No formal benchmark scores are reported in this prototype card.
 #### Summary
 
 Adapter is suitable for draft-generation workflows and should be paired with editorial review.
-
-## Environmental Impact
-
-Carbon emissions can be estimated with the [ML CO2 calculator](https://mlco2.github.io/impact#compute).
-
-- **Hardware Type:** Local GPU workstation
-- **Hours used:** Not systematically logged
-- **Cloud Provider:** N/A (local)
-- **Compute Region:** Local machine
-- **Carbon Emitted:** Not measured
 
 ## Technical Specifications
 
