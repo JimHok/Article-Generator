@@ -13,7 +13,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
 COPY model ./model
-COPY sample_request.json ./sample_request.json
+# COPY sample_request.json ./sample_request.json
 
 EXPOSE 8000
 
