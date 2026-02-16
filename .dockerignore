@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints
+artifacts
+training
+test
+data
+python-version
+.env

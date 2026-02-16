@@ -152,3 +152,43 @@ Reference article used for style calibration:
 - Add RAG with trusted business sources
 - Add Thai language support and bilingual generation
 - Containerize deployment (Docker) for production use
+
+---
+
+## Run with Docker
+
+### Build image
+
+```bash
+docker build -t article-generator:latest .
+```
+
+### Run container
+
+```bash
+docker run --rm -p 8000:8000 --name article-generator-api article-generator:latest
+```
+
+### Verify
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+### GPU-enabled container
+
+Requirements:
+- NVIDIA GPU driver installed
+- NVIDIA Container Toolkit installed
+
+Build GPU image:
+
+```bash
+docker build -f Dockerfile.gpu -t article-generator:gpu .
+```
+
+Run with GPU:
+
+```bash
+docker run --rm --gpus all -p 8000:8000 --name article-generator-api-gpu article-generator:gpu
+```
