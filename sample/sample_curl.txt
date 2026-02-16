@@ -1,0 +1,12 @@
+curl --location 'http://127.0.0.1:8000/generate' \
+--header 'Content-Type: application/json' \
+--data '{
+    "topic_category": "Smart Manufacturing",
+    "industry": "Manufacturing",
+    "seo_keywords": [
+        "predictive maintenance",
+        "industrial IoT"
+    ],
+    "article_length": "medium",
+    "tone": "strategic, technical, clear"
+}'

@@ -241,7 +241,7 @@ def _load_training_rows(config: TrainConfig) -> list[dict[str, Any]]:
             f"Unable to access split '{config.dataset_split}' from dataset '{dataset_name}'."
         )
 
-    effective_records = min(config.max_records, 2000)
+    effective_records = min(config.max_records, 10000)
     return list(cast(Any, iterable_dataset).take(effective_records))
 
 

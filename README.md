@@ -1,194 +1,165 @@
 # Article Generator Prototype
 
-A simple end-to-end prototype for generating insight articles about business trends and future ideas.
+End-to-end prototype for business insight article generation using FLAN-T5 + LoRA, a FastAPI service, and Docker deployment.
 
-This project covers:
+## What’s in this project
 
-1. **Model Selection & Fine-Tuning** (Hugging Face + LoRA)
-2. **Data Engineering Pipeline** (parameter cleaning + source enrichment)
-3. **Model Deployment** (FastAPI endpoint)
-4. **Documentation** (setup, training, run, and test)
-
----
-
-## 1) Model Selection & Fine-Tuning
-
-### Chosen model
-
-- **Base model**: `google/flan-t5-base`
-- **Why this model**:
-  - Strong instruction-following behavior
-  - Good quality-to-resource ratio for prototype work
-  - Compatible with efficient fine-tuning via PEFT/LoRA
-
-### Fine-tuning strategy
-
-- **Method**: LoRA (`peft`) on top of FLAN-T5
-- **Primary dataset source**: Hugging Face public dataset `ag_news`
-- **Training script**: [training/train.py](training/train.py)
-
-### Public dataset selection
-
-- **Dataset**: `ag_news` (Hugging Face Datasets)
-- **Selection logic for this use case**:
-  - Use label `2` (**Business**) and label `3` (**Sci/Tech**)
-  - Transform rows into instruction-tuning format for strategic article generation
-
-### Dataset guidance
-
-For better quality, expand the dataset with:
-
-- Business trend articles
-- Marketing strategy and campaign concept examples
-- Industry-specific writing samples aligned with the target editorial tone
-
-Keep all data compliant with licensing and internal usage permissions.
+1. **Model fine-tuning** with PEFT LoRA on top of `google/flan-t5-base`
+2. **Data pipeline** for topic/industry/keywords/context preprocessing
+3. **API deployment** with FastAPI (`/health`, `/generate`)
+4. **Container deployment** for CPU and GPU with Docker
 
 ---
 
-## 2) Data Engineering Pipeline
+## Model & Data
 
-Pipeline implementation: [app/pipeline.py](app/pipeline.py)
+- **Base model:** `google/flan-t5-base`
+- **Fine-tuning method:** LoRA (`peft`)
+- **Dataset:** `fabiochiu/medium-articles`
+- **Columns used:** `title`, `text`, `tags`
+- **Download strategy:** streaming + `take()`
+- **Row cap:** hard-capped at **10000 rows**
 
-### What it does
-
-- Cleans and normalizes text parameters
-- Cleans and deduplicates SEO keywords
-- Optionally extracts source context from `source_url`
-- Accepts `source_text` for document-based context
-- Produces a standardized object for prompt construction
-
-Prompt construction: [app/prompting.py](app/prompting.py)
-
-### Supported topic variety
-
-The payload structure supports diverse business domains:
-
-- Technology trends
-- Digital transformation
-- Marketing and consumer behavior
-- Industry-specific strategic content
+Training script: [training/train.py](training/train.py)
 
 ---
 
-## 3) API Deployment (FastAPI)
+## API
 
 API app: [app/main.py](app/main.py)
 
-### Endpoints
+Endpoints:
 
-- `GET /health`: model health + model path
-- `POST /generate`: generate an article from structured input parameters
+- `GET /health`
+- `POST /generate`
 
-Schema definitions: [app/schemas.py](app/schemas.py)
-Generation engine: [app/generator.py](app/generator.py)
+Request schema: [app/schemas.py](app/schemas.py)
+Prompt builder: [app/prompting.py](app/prompting.py)
+Generator: [app/generator.py](app/generator.py)
+
+Default model path (from env):
+
+- `MODEL_PATH=model/article-generator-flan-t5-lora`
 
 ---
 
-## 4) Setup & Run
+## Local setup (uv)
 
-### A. Install dependencies
+Install/sync dependencies:
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-### B. Fine-tune model (using Hugging Face public dataset)
+Run training:
 
 ```bash
-python training/train.py \
+uv run python training/train.py
+```
+
+Optional example with explicit args:
+
+```bash
+uv run python training/train.py \
   --model_name google/flan-t5-base \
-  --dataset_name ag_news \
+  --dataset_name fabiochiu/medium-articles \
   --dataset_split train \
-  --max_records 5000 \
-  --output_dir artifacts/article-generator-flan-t5-lora \
-  --epochs 3 \
+  --max_records 10000 \
+  --output_dir model/article-generator-flan-t5-lora \
+  --epochs 100 \
   --batch_size 2 \
   --lr 2e-4
 ```
 
-### C. Run API
+Run API:
 
 ```bash
-set MODEL_PATH=artifacts/article-generator-flan-t5-lora
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### D. Test API
-
-```bash
-curl -X POST "http://127.0.0.1:8000/generate" \
-  -H "Content-Type: application/json" \
-  -d @sample_request.json
-```
-
----
-
-## Example Input
-
-See [sample_request.json](sample_request.json).
-
----
-
-## Notes on Style Alignment
-
-The prompt template is tuned to reflect the reference editorial style:
-
-- Insight-first narrative
-- Structured sections (problem, misconceptions/insights, framework, actions)
-- Practical and strategic recommendations
-- Natural SEO keyword integration
-
-Reference article used for style calibration:
-
-- https://example.com/insights/customer-journey-misconceptions
-
----
-
-## Suggested Next Improvements
-
-- Expand dataset (100-1,000+ high-quality examples)
-- Add evaluation metrics (keyword coverage, structure, readability)
-- Add RAG with trusted business sources
-- Add Thai language support and bilingual generation
-- Containerize deployment (Docker) for production use
-
----
-
-## Run with Docker
-
-### Build image
-
-```bash
-docker build -t article-generator:latest .
-```
-
-### Run container
-
-```bash
-docker run --rm -p 8000:8000 --name article-generator-api article-generator:latest
-```
-
-### Verify
+Test health:
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
-### GPU-enabled container
+Test generation:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic_category": "Retail Intelligence",
+    "industry": "Retail",
+    "seo_keywords": ["customer journey", "personalization", "conversion"],
+    "article_length": "medium",
+    "tone": "insightful, strategic, clear"
+  }'
+```
+
+Note: [sample_request.json](sample_request.json) currently contains a list of example payloads.
+
+---
+
+## Docker (uv + pyproject)
+
+Both Dockerfiles use `uv` with `pyproject.toml` and `uv.lock`.
+
+### CPU image
+
+Build:
+
+```bash
+docker build -f Dockerfile -t article-generator:latest .
+```
+
+Run:
+
+```bash
+docker run --rm -p 8000:8000 --name article-generator-api article-generator:latest
+```
+
+### GPU image
 
 Requirements:
+
 - NVIDIA GPU driver installed
 - NVIDIA Container Toolkit installed
 
-Build GPU image:
+Build:
 
 ```bash
 docker build -f Dockerfile.gpu -t article-generator:gpu .
 ```
 
-Run with GPU:
+Run:
 
 ```bash
 docker run --rm --gpus all -p 8000:8000 --name article-generator-api-gpu article-generator:gpu
 ```
+
+### One-command deploy script
+
+Script: [deploy_docker.sh](deploy_docker.sh)
+
+```bash
+./deploy_docker.sh gpu
+```
+
+```bash
+./deploy_docker.sh cpu
+```
+
+Custom port:
+
+```bash
+PORT=8080 ./deploy_docker.sh gpu
+```
+
+---
+
+## Notes
+
+- Training is GPU-first (`--allow_cpu` for fallback).
+- Generation output is parsed from JSON-like model output (`Title` and `Article`).
+- Cached model loading is used in API for better performance.
