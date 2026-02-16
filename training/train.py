@@ -61,10 +61,10 @@ def parse_args() -> TrainConfig:
         "--dataset_name", type=str, default="fabiochiu/medium-articles"
     )
     data_group.add_argument("--dataset_split", type=str, default="train")
-    data_group.add_argument("--max_records", type=int, default=1000)
+    data_group.add_argument("--max_records", type=int, default=10000)
 
     train_group = parser.add_argument_group("Training")
-    train_group.add_argument("--epochs", type=float, default=10)
+    train_group.add_argument("--epochs", type=float, default=100)
     train_group.add_argument("--batch_size", type=int, default=2)
     train_group.add_argument("--lr", type=float, default=2e-4)
     train_group.add_argument("--save_strategy", type=str, default="no")
@@ -168,11 +168,13 @@ def _extract_keywords(text: str, top_k: int = 5) -> list[str]:
 
 def _length_from_text(text: str) -> str:
     word_count = len(text.split())
-    if word_count < 800:
-        return "500-700 words"
-    if word_count < 1300:
-        return "900-1200 words"
-    return "1400-1800 words"
+    if word_count < 700:
+        return "short"
+    if word_count < 1500:
+        return "medium"
+    if word_count < 3000:
+        return "long"
+    return "very long"
 
 
 def _get_column_names(dataset: Any) -> list[str]:

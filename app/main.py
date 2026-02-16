@@ -11,7 +11,7 @@ from app.schemas import GenerateRequest, GenerateResponse
 app = FastAPI(title="Article Generator Prototype", version="1.0.0")
 
 # Model path can point to a Hugging Face hub ID or local fine-tuned artifacts.
-MODEL_PATH = os.getenv("MODEL_PATH", "artifacts/article-generator-flan-t5-lora")
+MODEL_PATH = os.getenv("MODEL_PATH", "model/article-generator-flan-t5-lora")
 
 
 @app.get("/health")
